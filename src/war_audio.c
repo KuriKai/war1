@@ -335,8 +335,14 @@ void audioDataCallback(ma_device* sfx, void* output, const void* input, u32 samp
     WarMap* map = context->map;
     if (map)
     {
-        musicVolume *= ((f32)map->settings.musicVol / 100);
-        soundVolume *= ((f32)map->settings.sfxVol / 100);
+        f32 musicVolumeFactor = map->settings.musicEnabled
+            ? ((f32)map->settings.musicVol / 100) : 0;
+
+        f32 sfxVolumeFactor = map->settings.sfxEnabled
+            ? ((f32)map->settings.sfxVol / 100) : 0;
+
+        musicVolume *= musicVolumeFactor;
+        soundVolume *= sfxVolumeFactor;
     }
 
     WarEntityIdList toRemove;
@@ -418,7 +424,7 @@ void audioDataCallback(ma_device* sfx, void* output, const void* input, u32 samp
 
     for (s32 i = 0; i < toRemove.count; i++)
     {
-        WarEntityId entityId  = toRemove.items[i];
+        WarEntityId entityId = toRemove.items[i];
         removeEntityById(context, entityId);
     }
 

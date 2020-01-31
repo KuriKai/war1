@@ -411,12 +411,15 @@ void enterMap(WarContext* context)
     assert(levelPassable && levelPassable->type == WAR_RESOURCE_TYPE_LEVEL_PASSABLE);
 
     map->playing = true;
+    map->cheatsEnabled = true;
     map->result = WAR_LEVEL_RESULT_NONE;
     map->objectivesTime = 1;
     map->tilesetType = levelInfoIndex & 1 ? MAP_TILESET_FOREST : MAP_TILESET_SWAMP;
 
     map->settings.gameSpeed = WAR_SPEED_NORMAL;
+    map->settings.musicEnabled = true;
     map->settings.musicVol = 80;
+    map->settings.sfxEnabled = true;
     map->settings.sfxVol = 95;
     map->settings.mouseScrollSpeed = WAR_SPEED_NORMAL;
     map->settings.keyScrollSpeed = WAR_SPEED_NORMAL;
@@ -740,8 +743,8 @@ void leaveMap(WarContext* context)
 
 void updateViewport(WarContext *context)
 {
-    WarMap *map = context->map;
-    WarInput *input = &context->input;
+    WarMap* map = context->map;
+    WarInput* input = &context->input;
 
     map->wasScrolling = false;
 
@@ -773,8 +776,11 @@ void updateViewport(WarContext *context)
     // check for the arrows keys and update the position of the viewport
     else
     {
+        // don't scroll with arrow keys if Control or Shift are pressed
+        // don't scroll with arrow keys if the cheat status is active
         if (!isKeyPressed(input, WAR_KEY_CTRL) &&
-            !isKeyPressed(input, WAR_KEY_SHIFT))
+            !isKeyPressed(input, WAR_KEY_SHIFT) &&
+            !map->cheatStatus.enabled)
         {
             dir = getDirFromArrowKeys(context, input);
             keyScroll = true;
@@ -1425,7 +1431,112 @@ void updateCommandFromRightClick(WarContext* context)
 void updateStatus(WarContext* context)
 {
     WarMap* map = context->map;
+    WarInput* input = &context->input;
+    WarCheatStatus* cheatStatus = &map->cheatStatus;
     WarFlashStatus* flashStatus = &map->flashStatus;
+
+    WarEntity* statusCursor = findUIEntity(context, "txtStatusCursor");
+    assert(statusCursor);
+
+    WarEntity* statusTextUI = findUIEntity(context, "txtStatus");
+    assert(statusTextUI);
+
+    if (cheatStatus->enabled)
+    {
+        if (wasKeyPressed(input, WAR_KEY_ESC) ||
+            wasKeyPressed(input, WAR_KEY_ENTER))
+        {
+            if (wasKeyPressed(input, WAR_KEY_ENTER))
+            {
+                applyCheat(context, cheatStatus->text);
+            }
+
+            memset(cheatStatus->text, 0, sizeof(cheatStatus->text));
+            cheatStatus->position = 0;
+            cheatStatus->enabled = false;
+
+            return;
+        }
+
+        if (wasKeyPressed(input, WAR_KEY_TAB))
+        {
+            s32 length = strlen(cheatStatus->text);
+            if (TAB_WIDTH <= STATUS_TEXT_MAX_LENGTH - length)
+            {
+                strInsertAt(cheatStatus->text, cheatStatus->position, '\t');
+                cheatStatus->position++;
+            }
+        }
+        else if (wasKeyPressed(input, WAR_KEY_BACKSPACE))
+        {
+            if (cheatStatus->position > 0)
+            {
+                strRemoveAt(cheatStatus->text, cheatStatus->position - 1);
+                cheatStatus->position--;
+            }
+        }
+        else if (wasKeyPressed(input, WAR_KEY_DELETE))
+        {
+            s32 length = strlen(cheatStatus->text);
+            if (cheatStatus->position < length)
+            {
+                strRemoveAt(cheatStatus->text, cheatStatus->position);
+            }
+        }
+        else if (wasKeyPressed(input, WAR_KEY_RIGHT))
+        {
+            s32 length = strlen(cheatStatus->text);
+            if (cheatStatus->position < length)
+            {
+                cheatStatus->position++;
+            }
+        }
+        else if (wasKeyPressed(input, WAR_KEY_LEFT))
+        {
+            if (cheatStatus->position > 0)
+            {
+                cheatStatus->position--;
+            }
+        }
+        else if (wasKeyPressed(input, WAR_KEY_HOME))
+        {
+            cheatStatus->position = 0;
+        }
+        else if (wasKeyPressed(input, WAR_KEY_END))
+        {
+            s32 length = strlen(cheatStatus->text);
+            cheatStatus->position = length;
+        }
+
+        char statusText[100];
+        memset(statusText, 0, sizeof(statusText));
+        strcpy(statusText, "MSG: ");
+        strcpy(statusText + strlen("MSG: "), cheatStatus->text);
+        setStatus(context, NO_HIGHLIGHT, 0, 0, 0, statusText);
+
+        NVGfontParams params;
+        params.fontSize = statusTextUI->text.fontSize;
+        params.fontData = fontsData[statusTextUI->text.fontIndex];
+
+        vec2 prefixSize = nvgMeasureSingleSpriteText("MSG: ", strlen("MSG: "), params);
+        vec2 textSize = nvgMeasureSingleSpriteText(statusText, cheatStatus->position, params);
+        statusCursor->transform.position.x = map->bottomPanel.x + prefixSize.x + textSize.x;
+
+        setUIEntityStatus(statusCursor, true);
+
+        return;
+    }
+    else
+    {
+        setUIEntityStatus(statusCursor, false);
+
+        if (wasKeyPressed(input, WAR_KEY_ENTER))
+        {
+            memset(cheatStatus->text, 0, sizeof(cheatStatus->text));
+            cheatStatus->position = 0;
+            cheatStatus->enabled = true;
+        }
+    }
 
     if (flashStatus->enabled)
     {
@@ -1439,7 +1550,7 @@ void updateStatus(WarContext* context)
         flashStatus->enabled = false;
     }
 
-    char statusText[50] = {0};
+    char statusText[STATUS_TEXT_MAX_LENGTH] = {0};
     s32 highlightIndex = NO_HIGHLIGHT;
     s32 highlightCount = 0;
     s32 goldCost = 0;
@@ -2185,7 +2296,7 @@ void updateMap(WarContext* context)
 
     if (!map->playing)
     {
-        updateUIButtons(context);
+        updateUIButtons(context, true);
         updateMapCursor(context);
         return;
     }
@@ -2215,7 +2326,7 @@ void updateMap(WarContext* context)
     updateSelectedUnitsInfo(context);
     updateCommandButtons(context);
 
-    updateUIButtons(context);
+    updateUIButtons(context, !map->cheatStatus.enabled);
 
     updateCommandFromRightClick(context);
     updateStatus(context);
