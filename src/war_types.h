@@ -1912,6 +1912,7 @@ typedef struct
     WarRace race;
     s32 gold;
     s32 wood;
+    bool godMode;
     bool features[MAX_FEATURES_COUNT];
     WarUpgrade upgrades[MAX_UPGRADES_COUNT];
 } WarPlayerInfo;
@@ -1935,20 +1936,63 @@ typedef WarLevelResult (*WarCheckObjectivesFunc)(struct _WarContext* context);
     ((player)->upgrades[(upgrade)/2].level)
 #define checkUpgradeLevel(player, upgrade) \
     ((player)->upgrades[(upgrade)/2].level <= (player)->upgrades[(upgrade)/2].allowed)
+#define setUpgradeAllowed(player, upgrade, value) \
+    ((player)->upgrades[(upgrade)/2].allowed = (value))
+
+#define STATUS_TEXT_MAX_LENGTH 40
+#define CHEAT_TEXT_MAX_LENGTH 32
+#define CHEAT_FEEDBACK_TEXT_MAX_LENGTH 50
+
+typedef enum
+{
+    WAR_CHEAT_NONE,
+
+    // original cheats
+    WAR_CHEAT_GOLD,         // Pot of Gold: Gives 10000 gold and 5000 lumber to the player
+    WAR_CHEAT_SPELLS,       // Eye of newt: All spells are now be able to be casted
+    WAR_CHEAT_UPGRADES,     // Iron forge: Research all upgrades
+    WAR_CHEAT_END,          // Ides of March: Brings player to final campaign sequence
+    WAR_CHEAT_ENABLE,       // Corwin of Amber: Enables cheats
+    WAR_CHEAT_GOD_MODE,     // There can be only one: Your units stop taking damage and deal 255 Damage
+    WAR_CHEAT_WIN,          // Yours truly: Win current mission
+    WAR_CHEAT_LOSS,         // Crushing defeat: Instant loss
+    WAR_CHEAT_FOG,          // Sally Shears: Disables fog of war
+    WAR_CHEAT_SKIP_HUMAN,   // Human #: Skip to human level (enter 1-12 for #)
+    WAR_CHEAT_SKIP_ORC,     // Orc #: Skip to orc level (enter 1-12 for #)
+    WAR_CHEAT_SPEED,        // Hurry up guys: Speeds up building/unit production,
+
+    // custom cheats
+    WAR_CHEAT_MUSIC,        // Music #: Set volume music (enter 1-45 for #)
+                            // Music {on|off}: Enable or disable music
+    WAR_CHEAT_SOUND,        // Sound {on|off}: Enable or disable sounds
+    WAR_CHEAT_MUSIC_VOL,    // Music volume #: Set volume of music (enter 0-100 for #)
+    WAR_CHEAT_SOUND_VOL,    // Sound volume #: Set volume of sounds (enter 0-100 for #)
+    WAR_CHEAT_GLOBAL_SCALE, // Scale #: Set global scale (enter 1-5 for #)
+    WAR_CHEAT_GLOBAL_SPEED, // Speed #: Set global speed (enter 1-5 for #)
+    WAR_CHEAT_EDIT,         // Edit #: Make things editable (enter trees, walls, ruins, roads for #)
+    WAR_CHEAT_ADD_UNIT,     // Add unit #: Add unit to the map (enter unit name for #)
+    WAR_CHEAT_RAIN_OF_FIRE, // Rain of fire: Player can throw rain of fire projectiles
+
+    WAR_CHEAT_COUNT
+} WarCheat;
 
 typedef struct
 {
     bool enabled;
     f32 startTime;
     f32 duration;
-    char text[100];
+    char text[STATUS_TEXT_MAX_LENGTH];
 } WarFlashStatus;
 
 typedef struct
 {
     bool enabled;
+    bool visible;
     s32 position;
-    char text[100];
+    char text[CHEAT_TEXT_MAX_LENGTH];
+    bool feedback;
+    f32 feedbackTime;
+    char feedbackText[CHEAT_FEEDBACK_TEXT_MAX_LENGTH];
 } WarCheatStatus;
 
 typedef enum
@@ -1963,9 +2007,7 @@ typedef enum
 typedef struct
 {
     WarMapSpeed gameSpeed;
-    bool musicEnabled;
     s32 musicVol;
-    bool sfxEnabled;
     s32 sfxVol;
     WarMapSpeed mouseScrollSpeed;
     WarMapSpeed keyScrollSpeed;
@@ -2033,8 +2075,11 @@ typedef struct
     bool editingRoads;
     bool editingRuins;
     bool editingRainOfFire;
+    bool addingUnit;
+    WarUnitType addingUnitType;
 
-    bool cheatsEnabled;
+    bool hurryUp;
+    bool fowEnabled;
 
     WarPathFinder finder;
     WarUnitCommand command;
@@ -2067,6 +2112,8 @@ typedef struct
 {
     WarSceneType type;
     WarEntityManager entityManager;
+
+    WarCheatStatus cheatStatus;
 
     union
     {
@@ -2119,12 +2166,22 @@ typedef struct _WarContext
 
     ma_device sfx;
     tsf* soundFont;
-    f32 musicVolume;
-    f32 soundVolume;
     // this is shortcut to disable all audios in the map
     // to avoid crashes when freeing the map and the audio thread
     // trying to reproduce audios
     bool audioEnabled;
+    bool musicEnabled;
+    bool soundEnabled;
+    f32 musicVolume;
+    f32 soundVolume;
+
+    bool cheatsEnabled;
+
+    // this is a mutex used to make the deletion of the entities thread-safe
+    // since the audio thread will delete audio entities, that could lead
+    // to inconsistent states in the internal lists when the game try to also
+    // delete other entities.
+    pthread_mutex_t __mutex;
 
     WarInput input;
 

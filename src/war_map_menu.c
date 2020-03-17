@@ -480,7 +480,7 @@ void createGameOverMenu(WarContext* context)
         smallNormalRef,
         smallPressedRef,
         invalidRef,
-        vec2Addv(messagePanel, vec2i(95, 25)));
+        vec2Addv(messagePanel, vec2i(116, 25)));
     setUIEntityStatus(uiEntity, false);
     setUIButtonClickHandler(uiEntity, handleGameOverContinue);
     setUIButtonHotKey(uiEntity, WAR_KEY_O);
@@ -687,6 +687,8 @@ void showOrHideOptionsMenu(WarContext* context, bool status)
 
     if (status)
     {
+        map->settings.musicVol = (s32)(context->musicVolume * 100);
+        map->settings.sfxVol = (s32)(context->soundVolume * 100);
         memcpy(&map->settings2, &map->settings, sizeof(WarMapSettings));
 
         setUITextSpeedValueByName(context, "txtOptionsGameSpeedValue", map->settings2.gameSpeed);
@@ -947,6 +949,8 @@ void handleOptionsOk(WarContext* context, WarEntity* entity)
 
     // persist the changes
     memcpy(&map->settings, &map->settings2, sizeof(WarMapSettings));
+    context->musicVolume = (f32)map->settings.musicVol / 100;
+    context->soundVolume = (f32)map->settings.sfxVol / 100;
 
     showOrHideOptionsMenu(context, false);
     showOrHideMenu(context, true);

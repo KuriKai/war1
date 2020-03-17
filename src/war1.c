@@ -71,6 +71,7 @@
 #define SHL_WAVE_WRITER_IMPLEMENTATION
 #include "shl/wave_writer.h"
 
+#include "mutex.h"
 #include "log.h"
 #include "utils.h"
 #include "war_math.h"
@@ -135,6 +136,7 @@
 #include "war_map_menu.c"
 #include "war_map_ui.c"
 #include "war_map.c"
+#include "war_cheats_panel.c"
 #include "war_scene_download.c"
 #include "war_scene_blizzard.c"
 #include "war_scene_menu.c"

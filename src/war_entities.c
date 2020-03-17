@@ -493,8 +493,7 @@ WarEntity* createBuilding(WarContext* context,
     if (isGoingToBuild)
     {
         WarBuildingStats stats = getBuildingStats(type);
-        f32 buildTime = getMapScaledTime(context, stats.buildTime);
-        WarState* buildState = createBuildState(context, entity, buildTime);
+        WarState* buildState = createBuildState(context, entity, stats.buildTime);
         changeNextState(context, entity, buildState, true, true);
     }
 
@@ -698,6 +697,8 @@ void removeEntityById(WarContext* context, WarEntityId id)
     WarEntity* entity = findEntity(context, id);
     if (entity)
     {
+        pthread_mutex_lock(&context->__mutex);
+
         removeEntity(context, entity);
 
         if (isUIEntity(entity))
@@ -715,6 +716,8 @@ void removeEntityById(WarContext* context, WarEntityId id)
 
         WarEntityIdMapRemove(&manager->entitiesById, entity->id);
         WarEntityListRemove(&manager->entities, entity);
+
+        pthread_mutex_unlock(&context->__mutex);
 
         logDebug("removed entity with id: %d\n", id);
     }
@@ -1419,15 +1422,24 @@ void renderMinimap(WarContext* context, WarEntity* entity)
     {
         for(s32 x = 0; x < MAP_TILES_WIDTH; x++)
         {
-            WarMapTile* tile = getMapTileState(map, x, y);
-            if (tile->state == MAP_TILE_STATE_VISIBLE ||
+            s32 index = y * MAP_TILES_WIDTH + x;
+            WarMapTile* tile = &map->tiles[index];
+
+            if (!map->fowEnabled ||
+                tile->state == MAP_TILE_STATE_VISIBLE ||
                 tile->state == MAP_TILE_STATE_FOG)
             {
-                s32 index = y * MAP_TILES_WIDTH + x;
                 frame0->data[index * 4 + 0] = frame1->data[index * 4 + 0];
                 frame0->data[index * 4 + 1] = frame1->data[index * 4 + 1];
                 frame0->data[index * 4 + 2] = frame1->data[index * 4 + 2];
                 frame0->data[index * 4 + 3] = frame1->data[index * 4 + 3];
+            }
+            else
+            {
+                frame0->data[index * 4 + 0] = 0;
+                frame0->data[index * 4 + 1] = 0;
+                frame0->data[index * 4 + 2] = 0;
+                frame0->data[index * 4 + 3] = 255;
             }
         }
     }
@@ -1531,7 +1543,7 @@ void renderEntity(WarContext* context, WarEntity* entity)
         NULL,               // WAR_ENTITY_TYPE_AUDIO
         renderProjectile,   // WAR_ENTITY_TYPE_PROJECTILE
         NULL,               // WAR_ENTITY_TYPE_RAIN_OF_FIRE
-        NULL,               // WAR_ENTITY_TYPE_POISON_CLOUD
+        renderAnimation,    // WAR_ENTITY_TYPE_POISON_CLOUD
         NULL,               // WAR_ENTITY_TYPE_SIGHT
         renderMinimap,      // WAR_ENTITY_TYPE_MINIMAP
         renderAnimation,    // WAR_ENTITY_TYPE_ANIMATION
@@ -2008,11 +2020,16 @@ s32 getTotalDamage(s32 minDamage, s32 rndDamage, s32 armor)
 
 void takeDamage(WarContext* context, WarEntity *entity, s32 minDamage, s32 rndDamage)
 {
+    WarMap* map = context->map;
+
     assert(isUnit(entity));
 
-    WarUnitComponent *unit = &entity->unit;
-
+    WarUnitComponent* unit = &entity->unit;
     if (unit->invulnerable)
+        return;
+
+    WarPlayerInfo* player = &map->players[unit->player];
+    if (player->godMode)
         return;
 
     // Minimal damage + [Random damage - Enemy's Armor]
@@ -2151,6 +2168,8 @@ void rangeWallAttack(WarContext* context, WarEntity* entity, WarEntity* targetEn
 
 void meleeAttack(WarContext* context, WarEntity* entity, WarEntity* targetEntity)
 {
+    WarMap* map = context->map;
+
     assert(isUnit(entity));
 
     WarUnitComponent* unit = &entity->unit;
@@ -2158,12 +2177,23 @@ void meleeAttack(WarContext* context, WarEntity* entity, WarEntity* targetEntity
     // every unit has a 20 percent chance to miss (except catapults)
     if (isCatapultUnit(entity) || chance(80))
     {
-        takeDamage(context, targetEntity, unit->minDamage, unit->rndDamage);
+        s32 minDamage = unit->minDamage;
+        s32 rndDamage = unit->rndDamage;
+
+        WarPlayerInfo* player = &map->players[unit->player];
+        if (player->godMode)
+        {
+            minDamage = GOD_MODE_MIN_DAMAGE;
+        }
+
+        takeDamage(context, targetEntity, minDamage, rndDamage);
     }
 }
 
 void meleeWallAttack(WarContext* context, WarEntity* entity, WarEntity* targetEntity, WarWallPiece* piece)
 {
+    WarMap* map = context->map;
+
     assert(isUnit(entity));
 
     WarUnitComponent* unit = &entity->unit;
@@ -2171,7 +2201,16 @@ void meleeWallAttack(WarContext* context, WarEntity* entity, WarEntity* targetEn
     // every unit has a 20 percent chance to miss (except catapults)
     if (isCatapultUnit(entity) || chance(80))
     {
-        takeWallDamage(context, targetEntity, piece, unit->minDamage, unit->rndDamage);
+        s32 minDamage = unit->minDamage;
+        s32 rndDamage = unit->rndDamage;
+
+        WarPlayerInfo* player = &map->players[unit->player];
+        if (player->godMode)
+        {
+            minDamage = GOD_MODE_MIN_DAMAGE;
+        }
+
+        takeWallDamage(context, targetEntity, piece, minDamage, rndDamage);
     }
 }
 

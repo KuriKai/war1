@@ -14,6 +14,9 @@ bool initGame(WarContext* context)
     strcpy(context->windowTitle, "War 1");
     context->window = glfwCreateWindow(context->windowWidth, context->windowHeight, context->windowTitle, NULL, NULL);
     context->transitionDelay = 0.0f;
+    context->cheatsEnabled = true;
+
+    pthread_mutex_init(&context->__mutex, NULL);
 
     if (!context->window)
     {
@@ -332,14 +335,17 @@ void inputCharCallback(GLFWwindow* window, u32 codepoint)
     WarContext* context = glfwGetWindowUserPointer(window);
     assert(context);
 
+    WarScene* scene = context->scene;
     WarMap* map = context->map;
-    if (!map) return;
+    assert(scene || map);
 
-    WarCheatStatus* cheatStatus = &map->cheatStatus;
-    if (cheatStatus->enabled)
+    WarCheatStatus* cheatStatus = scene
+        ? &scene->cheatStatus : &map->cheatStatus;
+
+    if (cheatStatus->enabled && cheatStatus->visible)
     {
         s32 length = strlen(cheatStatus->text);
-        if (length < STATUS_TEXT_MAX_LENGTH)
+        if (length + 1 < CHEAT_TEXT_MAX_LENGTH)
         {
             strInsertAt(cheatStatus->text, cheatStatus->position, (char)codepoint);
             cheatStatus->position++;
@@ -347,70 +353,9 @@ void inputCharCallback(GLFWwindow* window, u32 codepoint)
     }
 }
 
-void updateGlobalSpeed(WarContext* context)
-{
-    WarInput* input = &context->input;
-
-    if (isKeyPressed(input, WAR_KEY_CTRL) && !isKeyPressed(input, WAR_KEY_SHIFT))
-    {
-        if (wasKeyPressed(input, WAR_KEY_1))
-            setGlobalSpeed(context, 1.0f);
-        else if (wasKeyPressed(input, WAR_KEY_2))
-            setGlobalSpeed(context, 2.0f);
-        else if (wasKeyPressed(input, WAR_KEY_3))
-            setGlobalSpeed(context, 3.0f);
-        else if (wasKeyPressed(input, WAR_KEY_4))
-            setGlobalSpeed(context, 4.0f);
-    }
-}
-
-void updateGlobalScale(WarContext* context)
-{
-    WarInput* input = &context->input;
-
-    if (isKeyPressed(input, WAR_KEY_CTRL) && isKeyPressed(input, WAR_KEY_SHIFT))
-    {
-        if (wasKeyPressed(input, WAR_KEY_1))
-            setGlobalScale(context, 1.0f);
-        else if (wasKeyPressed(input, WAR_KEY_2))
-            setGlobalScale(context, 2.0f);
-        else if (wasKeyPressed(input, WAR_KEY_3))
-            setGlobalScale(context, 3.0f);
-        else if (wasKeyPressed(input, WAR_KEY_4))
-            setGlobalScale(context, 4.0f);
-    }
-}
-
-void updateGlobalVolume(WarContext* context)
-{
-    WarInput* input = &context->input;
-
-    if (isKeyPressed(input, WAR_KEY_CTRL))
-    {
-        if (isKeyPressed(input, WAR_KEY_SHIFT))
-        {
-            if (wasKeyPressed(input, WAR_KEY_UP))
-                changeMusicVolume(context, 0.1f);
-            else if (wasKeyPressed(input, WAR_KEY_DOWN))
-                changeMusicVolume(context, -0.1f);
-        }
-        else
-        {
-            if (wasKeyPressed(input, WAR_KEY_UP))
-                changeSoundVolume(context, 0.1f);
-            else if (wasKeyPressed(input, WAR_KEY_DOWN))
-                changeSoundVolume(context, -0.1f);
-        }
-    }
-}
-
 void updateGame(WarContext* context)
 {
     WarInput* input = &context->input;
-
-    updateGlobalSpeed(context);
-    updateGlobalScale(context);
-    updateGlobalVolume(context);
 
     if (isKeyPressed(input, WAR_KEY_CTRL) &&
         wasKeyPressed(input, WAR_KEY_P))
@@ -425,7 +370,7 @@ void updateGame(WarContext* context)
 
     if (context->nextScene)
     {
-        disableAudio(context);
+        context->audioEnabled = false;
 
         if (context->scene)
             leaveScene(context);
@@ -436,10 +381,12 @@ void updateGame(WarContext* context)
         context->nextScene = NULL;
 
         enterScene(context);
+
+        context->audioEnabled = true;
     }
     else if (context->nextMap)
     {
-        disableAudio(context);
+        context->audioEnabled = false;
 
         if (context->scene)
             leaveScene(context);
@@ -450,6 +397,8 @@ void updateGame(WarContext* context)
         context->nextMap = NULL;
 
         enterMap(context);
+
+        context->audioEnabled = true;
     }
 
     if (context->transitionDelay > 0)
@@ -457,8 +406,6 @@ void updateGame(WarContext* context)
         context->transitionDelay = max(context->transitionDelay - context->deltaTime, 0.0f);
         return;
     }
-
-    enableAudio(context);
 
     if (context->scene)
     {

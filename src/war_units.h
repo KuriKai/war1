@@ -335,6 +335,8 @@ const WarWallPieceType wallTileTypeMap[16] =
 #define WAR_ROAD_GOLD_COST 50
 #define WAR_ROAD_WOOD_COST 0
 
+#define GOD_MODE_MIN_DAMAGE 255
+
 typedef struct
 {
     WarRuinPieceType type;
@@ -632,30 +634,31 @@ const WarBuildingStats buildingStats[] =
 typedef struct
 {
     WarUpgradeType type;
+    s32 maxLevelAllowed;
     s32 frameIndices[2];
 } WarUpgradeData;
 
 const WarUpgradeData upgradeData[] =
 {
-    { WAR_UPGRADE_ARROWS,           { WAR_PORTRAIT_ARROW_2,          WAR_PORTRAIT_ARROW_3         } },
-    { WAR_UPGRADE_SPEARS,           { WAR_PORTRAIT_SPEAR_2,          WAR_PORTRAIT_SPEAR_3         } },
-    { WAR_UPGRADE_SWORDS,           { WAR_PORTRAIT_SWORD_2,          WAR_PORTRAIT_SWORD_3         } },
-    { WAR_UPGRADE_AXES,             { WAR_PORTRAIT_AXE_2,            WAR_PORTRAIT_AXE_3           } },
-    { WAR_UPGRADE_HORSES,           { WAR_PORTRAIT_HORSE_1,          WAR_PORTRAIT_HORSE_2         } },
-    { WAR_UPGRADE_WOLVES,           { WAR_PORTRAIT_WOLVES_1,         WAR_PORTRAIT_WOLVES_2        } },
-    { WAR_UPGRADE_SCORPIONS,        { WAR_PORTRAIT_SCORPION,         WAR_PORTRAIT_SCORPION        } },
-    { WAR_UPGRADE_SPIDERS,          { WAR_PORTRAIT_SPIDER,           WAR_PORTRAIT_SPIDER          } },
-    { WAR_UPGRADE_RAIN_OF_FIRE,     { WAR_PORTRAIT_RAIN_OF_FIRE,     WAR_PORTRAIT_RAIN_OF_FIRE    } },
-    { WAR_UPGRADE_POISON_CLOUD,     { WAR_PORTRAIT_POISON_CLOUD,     WAR_PORTRAIT_POISON_CLOUD    } },
-    { WAR_UPGRADE_WATER_ELEMENTAL,  { WAR_PORTRAIT_WATER_ELEMENTAL,  WAR_PORTRAIT_WATER_ELEMENTAL } },
-    { WAR_UPGRADE_DAEMON,           { WAR_PORTRAIT_DAEMON,           WAR_PORTRAIT_DAEMON          } },
-    { WAR_UPGRADE_HEALING,          { WAR_PORTRAIT_HEALING,          WAR_PORTRAIT_HEALING         } },
-    { WAR_UPGRADE_RAISE_DEAD,       { WAR_PORTRAIT_RAISE_DEAD,       WAR_PORTRAIT_RAISE_DEAD      } },
-    { WAR_UPGRADE_FAR_SIGHT,        { WAR_PORTRAIT_FAR_SIGHT,        WAR_PORTRAIT_FAR_SIGHT       } },
-    { WAR_UPGRADE_DARK_VISION,      { WAR_PORTRAIT_DARK_VISION,      WAR_PORTRAIT_DARK_VISION     } },
-    { WAR_UPGRADE_INVISIBILITY,     { WAR_PORTRAIT_INVISIBILITY,     WAR_PORTRAIT_INVISIBILITY    } },
-    { WAR_UPGRADE_UNHOLY_ARMOR,     { WAR_PORTRAIT_UNHOLY_ARMOR,     WAR_PORTRAIT_UNHOLY_ARMOR    } },
-    { WAR_UPGRADE_SHIELD,           { WAR_PORTRAIT_SHIELD_2_HUMANS,  WAR_PORTRAIT_SHIELD_3_HUMANS } },
+    { WAR_UPGRADE_ARROWS,           2, { WAR_PORTRAIT_ARROW_2,          WAR_PORTRAIT_ARROW_3         } },
+    { WAR_UPGRADE_SPEARS,           2, { WAR_PORTRAIT_SPEAR_2,          WAR_PORTRAIT_SPEAR_3         } },
+    { WAR_UPGRADE_SWORDS,           2, { WAR_PORTRAIT_SWORD_2,          WAR_PORTRAIT_SWORD_3         } },
+    { WAR_UPGRADE_AXES,             2, { WAR_PORTRAIT_AXE_2,            WAR_PORTRAIT_AXE_3           } },
+    { WAR_UPGRADE_HORSES,           2, { WAR_PORTRAIT_HORSE_1,          WAR_PORTRAIT_HORSE_2         } },
+    { WAR_UPGRADE_WOLVES,           2, { WAR_PORTRAIT_WOLVES_1,         WAR_PORTRAIT_WOLVES_2        } },
+    { WAR_UPGRADE_SCORPIONS,        1, { WAR_PORTRAIT_SCORPION,         WAR_PORTRAIT_SCORPION        } },
+    { WAR_UPGRADE_SPIDERS,          1, { WAR_PORTRAIT_SPIDER,           WAR_PORTRAIT_SPIDER          } },
+    { WAR_UPGRADE_RAIN_OF_FIRE,     1, { WAR_PORTRAIT_RAIN_OF_FIRE,     WAR_PORTRAIT_RAIN_OF_FIRE    } },
+    { WAR_UPGRADE_POISON_CLOUD,     1, { WAR_PORTRAIT_POISON_CLOUD,     WAR_PORTRAIT_POISON_CLOUD    } },
+    { WAR_UPGRADE_WATER_ELEMENTAL,  1, { WAR_PORTRAIT_WATER_ELEMENTAL,  WAR_PORTRAIT_WATER_ELEMENTAL } },
+    { WAR_UPGRADE_DAEMON,           1, { WAR_PORTRAIT_DAEMON,           WAR_PORTRAIT_DAEMON          } },
+    { WAR_UPGRADE_HEALING,          1, { WAR_PORTRAIT_HEALING,          WAR_PORTRAIT_HEALING         } },
+    { WAR_UPGRADE_RAISE_DEAD,       1, { WAR_PORTRAIT_RAISE_DEAD,       WAR_PORTRAIT_RAISE_DEAD      } },
+    { WAR_UPGRADE_FAR_SIGHT,        1, { WAR_PORTRAIT_FAR_SIGHT,        WAR_PORTRAIT_FAR_SIGHT       } },
+    { WAR_UPGRADE_DARK_VISION,      1, { WAR_PORTRAIT_DARK_VISION,      WAR_PORTRAIT_DARK_VISION     } },
+    { WAR_UPGRADE_INVISIBILITY,     1, { WAR_PORTRAIT_INVISIBILITY,     WAR_PORTRAIT_INVISIBILITY    } },
+    { WAR_UPGRADE_UNHOLY_ARMOR,     1, { WAR_PORTRAIT_UNHOLY_ARMOR,     WAR_PORTRAIT_UNHOLY_ARMOR    } },
+    { WAR_UPGRADE_SHIELD,           2, { WAR_PORTRAIT_SHIELD_2_HUMANS,  WAR_PORTRAIT_SHIELD_3_HUMANS } },
 };
 
 typedef struct
@@ -1531,12 +1534,9 @@ bool isSkeletonUnit(WarEntity* entity)
     return isUnit(entity) && entity->unit.type == WAR_UNIT_SKELETON;
 }
 
-WarRace getUnitRace(WarEntity* entity)
+WarRace getUnitTypeRace(WarUnitType type)
 {
-    if (!isUnit(entity))
-        return WAR_RACE_NEUTRAL;
-
-    switch (entity->unit.type)
+    switch (type)
     {
         // units
         case WAR_UNIT_FOOTMAN:
@@ -1590,6 +1590,14 @@ WarRace getUnitRace(WarEntity* entity)
         default:
             return WAR_RACE_NEUTRAL;
     }
+}
+
+WarRace getUnitRace(WarEntity* entity)
+{
+    if (!isUnit(entity))
+        return WAR_RACE_NEUTRAL;
+
+    return getUnitTypeRace(entity->unit.type);
 }
 
 #define isHumanUnit(entity) (getUnitRace(entity) == WAR_RACE_HUMANS)
@@ -1860,6 +1868,26 @@ bool isCarryingResources(WarEntity* entity)
         case WAR_RESOURCE_WOOD: return entity->unit.amount == UNIT_MAX_CARRY_GOLD;
         default: return false;
     }
+}
+
+s32 getUnitSightRange(WarEntity* entity)
+{
+    assert(isUnit(entity));
+
+    s32 sight = 0;
+
+    if (isBuildingUnit(entity))
+    {
+        WarBuildingStats stats = getBuildingStats(entity->unit.type);
+        sight = stats.sight;
+    }
+    else
+    {
+        WarUnitStats stats = getUnitStats(entity->unit.type);
+        sight = stats.sight;
+    }
+
+    return sight;
 }
 
 bool displayUnitOnMinimap(WarEntity* entity);
