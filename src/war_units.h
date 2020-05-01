@@ -1604,6 +1604,8 @@ WarRace getUnitRace(WarEntity* entity)
 #define isOrcUnit(entity) (getUnitRace(entity) == WAR_RACE_ORCS)
 #define isNeutralUnit(entity) (getUnitRace(entity) == WAR_RACE_NEUTRAL)
 
+WarUnitType getUnitTypeForRace(WarUnitType type, WarRace race);
+
 WarProjectileType getProjectileType(WarUnitType type)
 {
     assert(isRangeUnitType(type));
@@ -1656,6 +1658,44 @@ WarUnitType getTownHallOfRace(WarRace race)
         case WAR_RACE_HUMANS: return WAR_UNIT_TOWNHALL_HUMANS;
         case WAR_RACE_ORCS: return WAR_UNIT_TOWNHALL_ORCS;
         default: return WAR_UNIT_TOWNHALL_HUMANS;
+    }
+}
+
+WarUnitType getProducerUnitOfType(WarUnitType type)
+{
+    switch (type)
+    {
+        case WAR_UNIT_PEASANT:
+            return WAR_UNIT_TOWNHALL_HUMANS;
+        case WAR_UNIT_PEON:
+            return WAR_UNIT_TOWNHALL_ORCS;
+
+        case WAR_UNIT_FOOTMAN:
+        case WAR_UNIT_CATAPULT_HUMANS:
+        case WAR_UNIT_KNIGHT:
+        case WAR_UNIT_ARCHER:
+            return WAR_UNIT_BARRACKS_HUMANS;
+
+        case WAR_UNIT_GRUNT:
+        case WAR_UNIT_CATAPULT_ORCS:
+        case WAR_UNIT_RAIDER:
+        case WAR_UNIT_SPEARMAN:
+            return WAR_UNIT_BARRACKS_ORCS;
+
+        case WAR_UNIT_CONJURER:
+            return WAR_UNIT_TOWER_HUMANS;
+        case WAR_UNIT_WARLOCK:
+            return WAR_UNIT_TOWER_ORCS;
+        case WAR_UNIT_CLERIC:
+            return WAR_UNIT_CHURCH;
+        case WAR_UNIT_NECROLYTE:
+            return WAR_UNIT_TEMPLE;
+
+        default:
+        {
+            logWarning("There is not producer unit for unit type %d\n", type);
+            return -1;
+        }
     }
 }
 

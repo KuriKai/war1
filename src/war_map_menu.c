@@ -1,4 +1,4 @@
-void setSpeedStr(WarMapSpeed value, char buffer[])
+static void setSpeedStr(WarMapSpeed value, char buffer[])
 {
     switch (value)
     {
@@ -7,6 +7,28 @@ void setSpeedStr(WarMapSpeed value, char buffer[])
         case WAR_SPEED_NORMAL:  strcpy(buffer, "Normal");   break;
         case WAR_SPEED_FASTER:  strcpy(buffer, "Faster");   break;
         case WAR_SPEED_FASTEST: strcpy(buffer, "Fastest");  break;
+    }
+}
+
+static void setUITextSpeedValueByName(WarContext* context, const char* name, WarMapSpeed value)
+{
+    WarEntity* entity = findUIEntity(context, name);
+    if (entity)
+    {
+        char speedStr[10];
+        setSpeedStr(value, speedStr);
+        setUIText(entity, speedStr);
+        setUITextHighlight(entity, NO_HIGHLIGHT, 0);
+    }
+}
+
+static void setUITextS32ValueByName(WarContext* context, const char* name, s32 value)
+{
+    WarEntity* entity = findUIEntity(context, name);
+    if (entity)
+    {
+        setUITextFormat(entity, "%d", value);
+        setUITextHighlight(entity, NO_HIGHLIGHT, 0);
     }
 }
 
@@ -340,7 +362,7 @@ void createObjectivesMenu(WarContext* context)
     WarResource* levelInfo = getOrCreateResource(context, map->levelInfoIndex);
     assert(levelInfo && levelInfo->type == WAR_RESOURCE_TYPE_LEVEL_INFO);
 
-    WarCampaignMapData campaignData = getCampaignData((WarCampaignMapType)map->levelInfoIndex);
+    WarCampaignMapData campaignData = getCampaignData(getCampaignMapTypeByLevelInfoIndex(map->levelInfoIndex));
 
     vec2 menuPanel = rectTopLeft(map->menuPanel);
 
@@ -599,28 +621,6 @@ void createDemoEndMenu(WarContext* context)
     setUIButtonClickHandler(uiEntity, handleDemoEndMenu);
     setUIButtonHotKey(uiEntity, WAR_KEY_M);
     setUITextHighlight(uiEntity, 0, 1);
-}
-
-void setUITextSpeedValueByName(WarContext* context, const char* name, WarMapSpeed value)
-{
-    WarEntity* entity = findUIEntity(context, name);
-    if (entity)
-    {
-        char speedStr[10];
-        setSpeedStr(value, speedStr);
-        setUIText(entity, speedStr);
-        setUITextHighlight(entity, NO_HIGHLIGHT, 0);
-    }
-}
-
-void setUITextS32ValueByName(WarContext* context, const char* name, s32 value)
-{
-    WarEntity* entity = findUIEntity(context, name);
-    if (entity)
-    {
-        setUITextFormat(entity, "%d", value);
-        setUITextHighlight(entity, NO_HIGHLIGHT, 0);
-    }
 }
 
 void enableOrDisableCommandButtons(WarContext* context, bool interactive)

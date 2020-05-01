@@ -410,7 +410,7 @@ f32 getMapScaledTime(WarContext* context, f32 t)
     return t;
 }
 
-WarMap* createMap(WarContext *context, s32 levelInfoIndex)
+WarMap* createMap(WarContext* context, s32 levelInfoIndex)
 {
     WarMap *map = (WarMap*)xcalloc(1, sizeof(WarMap));
     map->levelInfoIndex = levelInfoIndex;
@@ -418,6 +418,55 @@ WarMap* createMap(WarContext *context, s32 levelInfoIndex)
     initEntityManager(&map->entityManager);
 
     WarEntityIdListInit(&map->selectedEntities, WarEntityIdListDefaultOptions);
+
+    return map;
+}
+
+WarMap* createCustomMap(WarContext* context, s32 levelInfoIndex, WarRace yourRace, WarRace enemyRace)
+{
+    WarMap* map = createMap(context, levelInfoIndex);
+
+    WarResource* levelInfo = getOrCreateResource(context, levelInfoIndex);
+    assert(levelInfo && levelInfo->type == WAR_RESOURCE_TYPE_LEVEL_INFO && levelInfo->levelInfo.customMap);
+
+    levelInfo->levelInfo.startEntitiesCount = 0;
+    memset(levelInfo->levelInfo.startEntities, 0, sizeof(levelInfo->levelInfo.startEntities));
+
+    levelInfo->levelInfo.races[0] = yourRace;
+    levelInfo->levelInfo.races[1] = enemyRace;
+
+    for (s32 i = 0; i < levelInfo->levelInfo.startGoldminesCount; i++)
+    {
+        WarLevelUnit* startUnitConf = &levelInfo->levelInfo.startGoldmines[i];
+
+        WarLevelUnit* startUnit = &levelInfo->levelInfo.startEntities[levelInfo->levelInfo.startEntitiesCount];
+        startUnit->x = startUnitConf->x;
+        startUnit->y = startUnitConf->y;
+        startUnit->type = startUnitConf->type;
+        startUnit->player = startUnitConf->player;
+        startUnit->resourceKind = WAR_RESOURCE_GOLD;
+        startUnit->amount = randomi(20000, 30000);
+
+        levelInfo->levelInfo.startEntitiesCount++;
+    }
+
+    s32 configurationIndex = randomi(0, levelInfo->levelInfo.startConfigurationsCount);
+    WarCustomMapConfiguration* configuration = &levelInfo->levelInfo.startConfigurations[configurationIndex];
+
+    for (s32 i = 0; i < configuration->startEntitiesCount; i++)
+    {
+        WarLevelUnit* startUnitConf = &configuration->startEntities[i];
+
+        WarLevelUnit* startUnit = &levelInfo->levelInfo.startEntities[levelInfo->levelInfo.startEntitiesCount];
+        startUnit->x = startUnitConf->x;
+        startUnit->y = startUnitConf->y;
+        startUnit->player = startUnitConf->player;
+        startUnit->type = startUnit->player == 0
+            ? getUnitTypeForRace(startUnitConf->type, yourRace)
+            : getUnitTypeForRace(startUnitConf->type, enemyRace);
+
+        levelInfo->levelInfo.startEntitiesCount++;
+    }
 
     return map;
 }
@@ -459,10 +508,11 @@ void enterMap(WarContext* context)
     assert(levelPassable && levelPassable->type == WAR_RESOURCE_TYPE_LEVEL_PASSABLE);
 
     map->playing = true;
+    map->custom = levelInfo->levelInfo.customMap;
+    map->tilesetType = levelInfo->levelInfo.tilesetType;
     map->fowEnabled = true;
     map->result = WAR_LEVEL_RESULT_NONE;
     map->objectivesTime = 1;
-    map->tilesetType = levelInfoIndex & 1 ? MAP_TILESET_FOREST : MAP_TILESET_SWAMP;
 
     map->settings.gameSpeed = WAR_SPEED_NORMAL;
     map->settings.mouseScrollSpeed = WAR_SPEED_NORMAL;
@@ -484,8 +534,6 @@ void enterMap(WarContext* context)
     map->viewport = recti(startX, startY, MAP_VIEWPORT_WIDTH, MAP_VIEWPORT_HEIGHT);
 
     map->finder = initPathFinder(PATH_FINDING_ASTAR, MAP_TILES_WIDTH, MAP_TILES_HEIGHT, levelPassable->levelPassable.data);
-
-    context->map = map;
 
     // create the black sprite
     {
@@ -697,74 +745,28 @@ void enterMap(WarContext* context)
             for (s32 j = 0; j < MAX_FEATURES_COUNT; j++)
             {
                 player->features[j] = levelInfo->levelInfo.allowedFeatures[j];
-
-                // REMOVE THIS: This is only for testing
-                // if (levelInfoIndex == 117)
-                //     player->features[j] = true;
-                // else if (levelInfoIndex == 118)
-                //     player->features[j] = true;
             }
 
             for (s32 j = 0; j < MAX_UPGRADES_COUNT; j++)
             {
                 player->upgrades[j].allowed = levelInfo->levelInfo.allowedUpgrades[j][i];
                 player->upgrades[j].level = 0;
-
-                // REMOVE THIS: This is only for testing
-                // if (levelInfoIndex == 117)
-                //     player->upgrades[j].allowed = 2;
-                // else if (levelInfoIndex == 118)
-                //     player->upgrades[j].allowed = 2;
             }
         }
     }
 
     // create the starting entities
     {
-        for(s32 i = 0; i < levelInfo->levelInfo.startEntitiesCount; i++)
+        for (s32 i = 0; i < levelInfo->levelInfo.startEntitiesCount; i++)
         {
             WarLevelUnit startUnit = levelInfo->levelInfo.startEntities[i];
-
-            // REMOVE THIS: This is only for testing
-            // if (levelInfoIndex == 117)
-            // {
-            //     if (startUnit.type == WAR_UNIT_FOOTMAN)
-            //         startUnit.type = WAR_UNIT_CONJURER;
-            // }
-            // else if (levelInfoIndex == 118)
-            // {
-            //     if (startUnit.type == WAR_UNIT_GRUNT)
-            //         startUnit.type = WAR_UNIT_WARLOCK;
-            // }
-
             createUnit(context, startUnit.type, startUnit.x, startUnit.y, startUnit.player,
                        startUnit.resourceKind, startUnit.amount, true);
         }
-
-        // REMOVE THIS: This is only for testing
-        // if (levelInfoIndex == 117)
-        // {
-        //     createBuilding(context, WAR_UNIT_BARRACKS_HUMANS, 37, 18, 0, false);
-        //     createBuilding(context, WAR_UNIT_LUMBERMILL_HUMANS, 36, 22, 0, false);
-        //     createBuilding(context, WAR_UNIT_BLACKSMITH_HUMANS, 40, 16, 0, false);
-        //     createBuilding(context, WAR_UNIT_CHURCH, 45, 22, 0, false);
-        //     createBuilding(context, WAR_UNIT_STABLE, 45, 18, 0, false);
-        //     createBuilding(context, WAR_UNIT_TOWER_HUMANS, 34, 16, 0, false);
-
-        //     createBuilding(context, WAR_UNIT_LUMBERMILL_ORCS, 24, 16, 1, false);
-        // }
-        // else if (levelInfoIndex == 118)
-        // {
-        //     createBuilding(context, WAR_UNIT_BARRACKS_ORCS, 48, 30, 0, false);
-        //     createBuilding(context, WAR_UNIT_LUMBERMILL_ORCS, 47, 27, 0, false);
-        //     createBuilding(context, WAR_UNIT_BLACKSMITH_ORCS, 58, 26, 0, false);
-        //     createBuilding(context, WAR_UNIT_TEMPLE, 48, 23, 0, false);
-        //     createBuilding(context, WAR_UNIT_KENNEL, 57, 22, 0, false);
-        //     createBuilding(context, WAR_UNIT_TOWER_ORCS, 51, 21, 0, false);
-
-        //     createBuilding(context, WAR_UNIT_LUMBERMILL_HUMANS, 24, 16, 1, false);
-        // }
     }
+
+    // init AI
+    initAI(context);
 
     // add ui entities
     createMapUI(context);
@@ -818,7 +820,7 @@ void updateViewport(WarContext *context)
         // check if it was at the edge of the map to scroll also and update the position of the viewport
         else if(!input->isDragging)
         {
-            dir = getDirFromMousePos(context, input);
+            dir = getDirFromMousePos(context);
             mouseScroll = true;
         }
     }
@@ -831,7 +833,7 @@ void updateViewport(WarContext *context)
             !isKeyPressed(input, WAR_KEY_SHIFT) &&
             !cheatsEnabledAndVisible(map))
         {
-            dir = getDirFromArrowKeys(context, input);
+            dir = getDirFromArrowKeys(context);
             keyScroll = true;
         }
     }
@@ -2356,6 +2358,13 @@ void determineFoWTypes(WarContext* context)
     }
 }
 
+WarCampaignMapType getCampaignMapTypeByLevelInfoIndex(s32 levelInfoIndex)
+{
+    return levelInfoIndex >= WAR_CAMPAIGN_HUMANS_01 && levelInfoIndex <= WAR_CAMPAIGN_ORCS_12
+        ? (WarCampaignMapType)levelInfoIndex
+        : WAR_CAMPAIGN_CUSTOM;
+}
+
 WarLevelResult checkObjectives(WarContext* context)
 {
     WarMap* map = context->map;
@@ -2364,7 +2373,7 @@ WarLevelResult checkObjectives(WarContext* context)
 
     if (map->objectivesTime <= 0)
     {
-        WarCampaignMapData data = getCampaignData((WarCampaignMapType)map->levelInfoIndex);
+        WarCampaignMapData data = getCampaignData(getCampaignMapTypeByLevelInfoIndex(map->levelInfoIndex));
         if (data.checkObjectivesFunc)
         {
             return data.checkObjectivesFunc(context);
@@ -2374,6 +2383,31 @@ WarLevelResult checkObjectives(WarContext* context)
     }
 
     return WAR_LEVEL_RESULT_NONE;
+}
+
+void updateObjectives(WarContext* context)
+{
+    WarMap* map = context->map;
+
+    if (map->result == WAR_LEVEL_RESULT_NONE)
+    {
+        map->result = checkObjectives(context);
+        return;
+    }
+
+    map->playing = false;
+
+    bool isLastLevel = map->levelInfoIndex == WAR_CAMPAIGN_HUMANS_02 ||
+                        map->levelInfoIndex == WAR_CAMPAIGN_ORCS_02;
+
+    if (map->result == WAR_LEVEL_RESULT_WIN && isLastLevel)
+    {
+        showDemoEndMenu(context, true);
+    }
+    else
+    {
+        showOrHideGameOverMenu(context, true);
+    }
 }
 
 void updateMap(WarContext* context)
@@ -2399,6 +2433,8 @@ void updateMap(WarContext* context)
         // selection shouldn't be lost
         updateSelection(context);
     }
+
+    updateAI(context);
 
     updateStateMachines(context);
     updateActions(context);
@@ -2429,27 +2465,7 @@ void updateMap(WarContext* context)
     updateRainOfFireEdit(context);
     updateAddUnit(context);
 
-    if (map->result == WAR_LEVEL_RESULT_NONE)
-    {
-        map->result = checkObjectives(context);
-    }
-
-    if (map->result != WAR_LEVEL_RESULT_NONE)
-    {
-        map->playing = false;
-
-        bool isLastLevel = map->levelInfoIndex == WAR_CAMPAIGN_HUMANS_02 ||
-                           map->levelInfoIndex == WAR_CAMPAIGN_ORCS_02;
-
-        if (map->result == WAR_LEVEL_RESULT_WIN && isLastLevel)
-        {
-            showDemoEndMenu(context, true);
-        }
-        else
-        {
-            showOrHideGameOverMenu(context, true);
-        }
-    }
+    updateObjectives(context);
 }
 
 void renderTerrain(WarContext* context)

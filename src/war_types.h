@@ -5,6 +5,9 @@
 #define MAX_ENTITIES_COUNT 100
 #define MAX_SPRITE_FRAME_COUNT 100
 #define MAX_CONSTRUCTS_COUNT 100
+#define MAX_CUSTOM_MAP_GOLDMINES_COUNT 10
+#define MAX_CUSTOM_MAP_CONFIGURATIONS_COUNT 10
+#define MAX_CUSTOM_MAP_ENTITIES_COUNT 100
 
 // all palettes have 768 colors
 #define PALETTE_LENGTH 768
@@ -524,6 +527,12 @@ typedef struct
 
 typedef struct
 {
+    u32 startEntitiesCount;
+    WarLevelUnit startEntities[MAX_CUSTOM_MAP_ENTITIES_COUNT];
+} WarCustomMapConfiguration;
+
+typedef struct
+{
     WarResourceType type;
 
     union
@@ -553,6 +562,7 @@ typedef struct
             u32 allowId;
             bool allowedHumanUnits;
             bool allowedOrcsUnits;
+            bool customMap;
             u8 allowedFeatures[MAX_FEATURES_COUNT];
             u8 allowedUpgrades[MAX_UPGRADES_COUNT][MAX_PLAYERS_COUNT];
             u16 startX;
@@ -563,6 +573,7 @@ typedef struct
             u16 paletteIndex;
             u16 tilesIndex;
             u16 tilesetIndex;
+            u16 tilesetType;
             u32 lumber[MAX_PLAYERS_COUNT];
             u32 gold[MAX_PLAYERS_COUNT];
             WarRace races[MAX_PLAYERS_COUNT];
@@ -576,6 +587,12 @@ typedef struct
 
             u32 startWallsCount;
             WarLevelConstruct startWalls[MAX_CONSTRUCTS_COUNT];
+
+            u32 startGoldminesCount;
+            WarLevelUnit startGoldmines[MAX_CUSTOM_MAP_GOLDMINES_COUNT];
+
+            u32 startConfigurationsCount;
+            WarCustomMapConfiguration startConfigurations[MAX_CUSTOM_MAP_CONFIGURATIONS_COUNT];
         } levelInfo;
 
         struct
@@ -648,7 +665,8 @@ typedef enum
     WAR_CAMPAIGN_HUMANS_11,
     WAR_CAMPAIGN_ORCS_11,
     WAR_CAMPAIGN_HUMANS_12,
-    WAR_CAMPAIGN_ORCS_12
+    WAR_CAMPAIGN_ORCS_12,
+    WAR_CAMPAIGN_CUSTOM
 } WarCampaignMapType;
 
 typedef enum
@@ -1906,15 +1924,88 @@ typedef struct
     s32 level;
 } WarUpgrade;
 
+typedef enum
+{
+    WAR_AI_COMMAND_STATUS_CREATED,
+    WAR_AI_COMMAND_STATUS_STARTED,
+    WAR_AI_COMMAND_STATUS_COMPLETED,
+} WarAICommandStatus;
+
+typedef enum
+{
+    WAR_AI_COMMAND_REQUEST,
+    WAR_AI_COMMAND_WAIT,
+    WAR_AI_COMMAND_ATTACK,
+    WAR_AI_COMMAND_DEFEND,
+    WAR_AI_COMMAND_SLEEP,
+
+    WAR_AI_COMMAND_COUNT
+} WarAICommandType;
+
 typedef struct
 {
-    s32 index;
+    u32 id;
+    WarAICommandType type;
+    WarAICommandStatus status;
+
+    union
+    {
+        struct
+        {
+            WarUnitType unitType;
+            bool checkExisting;
+            s32 count;
+        } request;
+
+        struct
+        {
+            WarUnitType unitType;
+            s32 count;
+        } wait;
+
+        struct
+        {
+            s32 time;
+        } sleep;
+    };
+} WarAICommand;
+
+shlDeclareQueue(WarAICommandQueue, WarAICommand*)
+shlDefineQueue(WarAICommandQueue, WarAICommand*)
+
+shlDeclareList(WarAICommandList, WarAICommand*)
+shlDefineList(WarAICommandList, WarAICommand*)
+
+bool aiCommandEquals(const WarAICommand* command1, const WarAICommand* command2)
+{
+    return command1->id == command2->id;
+}
+
+void aiCommandFree(WarAICommand* command)
+{
+    free((void*)command);
+}
+
+#define WarAICommandListDefaultOptions ((WarAICommandListOptions){NULL, aiCommandEquals, aiCommandFree})
+#define WarAICommandQueueDefaultOptions ((WarAICommandQueueOptions){NULL, aiCommandEquals, aiCommandFree})
+
+typedef struct
+{
+    u32 staticCommandId;
+    WarAICommandQueue currentCommands;
+    WarAICommandList nextCommands;
+} WarAI;
+
+typedef struct
+{
+    u8 index;
     WarRace race;
     s32 gold;
     s32 wood;
     bool godMode;
     bool features[MAX_FEATURES_COUNT];
     WarUpgrade upgrades[MAX_UPGRADES_COUNT];
+    WarAI* ai;
 } WarPlayerInfo;
 
 typedef WarLevelResult (*WarCheckObjectivesFunc)(struct _WarContext* context);
@@ -2027,6 +2118,7 @@ typedef struct
 typedef struct
 {
     bool playing;
+    bool custom;
     WarLevelResult result;
 
     s32 levelInfoIndex;
@@ -2126,6 +2218,13 @@ typedef struct
         {
             f32 time;
         } blizzard;
+
+        struct
+        {
+            WarRace yourRace;
+            WarRace enemyRace;
+            s32 customMap;
+        } menu;
 
         struct
         {
